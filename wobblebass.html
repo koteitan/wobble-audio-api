@@ -1,33 +1,60 @@
 <!DOCTYPE html>
 <html><head>
 <meta http-equiv="Content-type" content="text/html; charset=utf-8">
-<meta http-equiv="Content-Style-Type" content="text/css">
+<meta http-equiv="Content-Style-Type" content="text/css"><style><!--
+  body{font-family:Arial; color:#888888; background-color:black}  
+  a{color:#888888;border-style:none;text-decoration:underline}
+  a:link{color:#888888;border-style:none;text-decoration:underline}
+  a:visited{color:#888888;border-style:none;text-decoration:underline}
+  a:hover{color:#888888;border-color:none;text-decoration:underline}
+  address{text-align:right;font-style:normal}
+//--></style>
 </head><body>
+wobble-audio-api-v1.1.0:<br>
 <ul>
   <li>osc:<ul>
-    <li>amp<input type=range id=osc_amp_gauge  min=0 max=100 value=50><span id=osc_amp_display ></span></li>
-    <li>note<input type=range id=osc_note_gauge min=0 max= 88 value=10><span id=osc_note_display></span></li>
+    <li>amp: <input type=range id=osc_amp_gauge  min=0 max=100 value=50><span id=osc_amp_display ></span></li>
+    <li>note: <input type=range id=osc_note_gauge min=0 max= 88 value=10><span id=osc_note_display></span></li>
+    <li>scale: <span id=scale_span></span></li>
     </ul></li>
   <li>lfo:<ul>
-    <li>amp:<input type=range id=lfo_amp_gauge min=0 max=100 value=100><span id=lfo_amp_display></span></li>
-    <li>offset:<input type=range id=lfo_offset_gauge min=1 max=2000 value=200><span id=lfo_offset_display></span></li>
-    <li>cycle:<input type=range id=lfo_cycle_gauge min=1 max=100 value=50><span id=lfo_cycle_display></span></li>
+    <li>amp: <input type=range id=lfo_amp_gauge min=0 max=100 value=100><span id=lfo_amp_display></span></li>
+    <li>offset: <input type=range id=lfo_offset_gauge min=1 max=2000 value=200><span id=lfo_offset_display></span></li>
+    <li>cycle: <input type=range id=lfo_cycle_gauge min=1 max=100 value=50><span id=lfo_cycle_display></span></li>
   </ul></li>
   <li>lpf:<ul>
-    <li>fc:<input type=range id=lpf_fc_gauge min=2 max=100 value=100><span id=lpf_fc_display></span></li>
+    <li>fc: <input type=range id=lpf_fc_gauge min=2 max=100 value=100><span id=lpf_fc_display></span></li>
     <li>q: <input type=range id=lpf_q_gauge  min=1 max=100 value=14><span id=lpf_q_display></span></li>
-    <li><input type=button id=lpf_reset_button value=reset onclick='javascript:lpf_reset();'></li>    
+    <li>reset: <input type=button id=lpf_reset_button value=reset onclick='javascript:lpf_reset();'></li>    
   </ul></li>
 </ul>
+<address>
+wobble-audio-api-v1.1.0:<br>
+programmed by <a href='http://twitter.com/#!/koteitan'>koteitan</a></address>
 <script type="text/javascript"><!-- //--------------------------------------- 
 var audio_context;
 var jsnode;
 var strNote = new Array('A','A#','B','C','C#','D','D#','E','F','F#','G','G#');
 var osc_phase =  0; // radian
 var lfo_phase = 0; // radian
+var osc_scale_notelist = [];
 var lpf_hist = [0,0];
 var lpf_fc;
 window.onload = function(){
+  //misc
+  var html="<table><tr>";
+  for(var i=0;i<12;i++){
+    html += "<td style='text-align:center'>"+strNote[i]+"</td>"
+  }
+  html += "</tr><tr>";
+  var osc_scale_notelist_init = [true,false,true,true,false,true,false,true,true,false,true,false]; //
+  for(var i=0;i<12;i++){
+    var strChecked = osc_scale_notelist_init[i]?"checked":"";
+    html += "<td style='text-align:center'><input type=checkbox id=scale_checkbox"+i+" "+strChecked+" onclick='javascript:set_scale();'></td>";
+  }
+  html += "</tr></table>";
+  document.getElementById('scale_span').innerHTML = html;
+  //audio
   audio_context = new webkitAudioContext();
   jsnode = audio_context.createJavaScriptNode(4096,0,1);
   jsnode.onaudioprocess = function(e){
@@ -42,7 +69,7 @@ window.onload = function(){
     var lfo_freq   = 1/lfo_cycle;
     var lfo_offset = parseFloat(lfo_offset_gauge.value);
     var lfo_amp    = parseFloat(lfo_amp_gauge   .value)/100;
-    var osc_note   = parseFloat(osc_note_gauge  .value);
+    var osc_note   = osc_scale_notelist[parseInt(osc_note_gauge  .value)];
     var osc_amp    = parseFloat(osc_amp_gauge   .value)/100;
     var s = new Float32Array(4096);
     //osc
@@ -80,10 +107,21 @@ window.onload = function(){
     lfo_amp_display.   innerHTML = Math.floor(lfo_amp*100)+"%";
     lfo_offset_display.innerHTML = lfo_offset+"hz";
   };
+  set_scale();
   jsnode.connect(audio_context.destination);
 }
 var lpf_reset=function(){
   lpf_hist = [0,0];
+}
+var set_scale=function(){
+  osc_scale_notelist = [];
+  var noteno = 0;
+  while(osc_scale_notelist.length<88){
+    if(document.getElementById("scale_checkbox"+(noteno%12)).checked){
+      osc_scale_notelist.push(noteno);
+    }
+    noteno++;
+  }
 }
 //--------------------------------------- --></script>
 <body></html>
