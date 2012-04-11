@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html><head>
+<meta http-equiv="Content-type" content="text/html; charset=utf-8">
+<meta http-equiv="Content-Style-Type" content="text/css">
+</head><body>
+<ul>
+  <li>osc:<ul>
+    <li>amp<input type=range id=osc_amp_gauge  min=0 max=100 value=50><span id=osc_amp_display ></span></li>
+    <li>note<input type=range id=osc_note_gauge min=0 max= 88 value=10><span id=osc_note_display></span></li>
+    </ul></li>
+  <li>lfo:<ul>
+    <li>amp:<input type=range id=lfo_amp_gauge min=0 max=100 value=100><span id=lfo_amp_display></span></li>
+    <li>offset:<input type=range id=lfo_offset_gauge min=1 max=2000 value=200><span id=lfo_offset_display></span></li>
+    <li>cycle:<input type=range id=lfo_cycle_gauge min=1 max=100 value=50><span id=lfo_cycle_display></span></li>
+  </ul></li>
+  <li>lpf:<ul>
+    <li>fc:<input type=range id=lpf_fc_gauge min=2 max=100 value=100><span id=lpf_fc_display></span></li>
+    <li>q: <input type=range id=lpf_q_gauge  min=1 max=100 value=14><span id=lpf_q_display></span></li>
+    <li><input type=button id=lpf_reset_button value=reset onclick='javascript:lpf_reset();'></li>    
+  </ul></li>
+</ul>
+<script type="text/javascript"><!-- //--------------------------------------- 
+var audio_context;
+var jsnode;
+var strNote = new Array('A','A#','B','C','C#','D','D#','E','F','F#','G','G#');
+var osc_phase =  0; // radian
+var lfo_phase = 0; // radian
+var lpf_hist = [0,0];
+var lpf_fc;
+window.onload = function(){
+  audio_context = new webkitAudioContext();
+  jsnode = audio_context.createJavaScriptNode(4096,0,1);
+  jsnode.onaudioprocess = function(e){
+    //callback ---------------------
+    //misc
+    var fs = audio_context.sampleRate;
+    var invfs = 1/fs;
+    //gui
+//    lpf_fc     = lpf_fc_gauge.value;
+    var lpf_q      = parseFloat(lpf_q_gauge     .value);
+    var lfo_cycle  = parseFloat(lfo_cycle_gauge .value)/1000;
+    var lfo_freq   = 1/lfo_cycle;
+    var lfo_offset = parseFloat(lfo_offset_gauge.value);
+    var lfo_amp    = parseFloat(lfo_amp_gauge   .value)/100;
+    var osc_note   = parseFloat(osc_note_gauge  .value);
+    var osc_amp    = parseFloat(osc_amp_gauge   .value)/100;
+    var s = new Float32Array(4096);
+    //osc
+    var osc_freq = 27.5*Math.pow(2,osc_note/12);
+    for(var i=0;i<s.length;i++){
+      osc_phase  = (osc_phase + 2*Math.PI*osc_freq*invfs) % (2*Math.PI);
+      s[i] = osc_amp*Math.sin(osc_phase);
+    }
+    //lfo
+    var lfo_out = new Float32Array(4096);
+    for(var i=0;i<s.length;i++){
+      lfo_phase  = (lfo_phase + 2*Math.PI*lfo_freq*invfs) % (2*Math.PI);
+      lfo_out[i] = lfo_offset + (lfo_amp*lfo_offset)*Math.sin(lfo_phase);
+    }
+    //lpf (dsv)
+    var q = 1/lpf_q;
+    for(var i=0;i<s.length;i++){
+      lpf_fc = lfo_out[i];
+      var f = 2*Math.sin(Math.PI*lpf_fc*invfs);
+      var out = lpf_hist[1] + f*lpf_hist[0];
+      lpf_hist[1] = out;
+      lpf_hist[0] = f*(s[i]-out-q*lpf_hist[0]) + lpf_hist[0];
+      s[i] = out;
+    }
+    //out
+    e.outputBuffer.getChannelData(0).set(s);
+    e.outputBuffer.getChannelData(1).set(s);
+    osc_note_display.innerHTML = strNote[osc_note%12]+Math.floor(osc_note/12);
+    //gui
+    lpf_fc_gauge.value = lpf_fc;
+    osc_amp_display.   innerHTML = Math.floor(osc_amp*100)+"%";
+    lpf_fc_display.    innerHTML = lpf_fc+"hz";
+    lpf_q_display.     innerHTML  = lpf_q;
+    lfo_cycle_display. innerHTML  = (lfo_cycle*1000+"").substr(0,4)+"ms";
+    lfo_amp_display.   innerHTML = Math.floor(lfo_amp*100)+"%";
+    lfo_offset_display.innerHTML = lfo_offset+"hz";
+  };
+  jsnode.connect(audio_context.destination);
+}
+var lpf_reset=function(){
+  lpf_hist = [0,0];
+}
+//--------------------------------------- --></script>
+<body></html>
