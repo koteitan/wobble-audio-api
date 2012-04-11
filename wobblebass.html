@@ -10,9 +10,15 @@
   address{text-align:right;font-style:normal}
 //--></style>
 </head><body>
-wobble-audio-api-v1.1.0:<br>
+<form name=form>
+wobble-audio-api-v1.2.0:<br>
 <ul>
   <li>osc:<ul>
+    <li>type: 
+      <input type=radio name=osc_type_radio checked>sin
+      <input type=radio name=osc_type_radio>saw
+      <input type=radio name=osc_type_radio>sqr
+      <input type=radio name=osc_type_radio>pls</li>
     <li>amp: <input type=range id=osc_amp_gauge  min=0 max=100 value=50><span id=osc_amp_display ></span></li>
     <li>note: <input type=range id=osc_note_gauge min=0 max= 88 value=10><span id=osc_note_display></span></li>
     <li>scale: <span id=scale_span></span></li>
@@ -20,16 +26,21 @@ wobble-audio-api-v1.1.0:<br>
   <li>lfo:<ul>
     <li>amp: <input type=range id=lfo_amp_gauge min=0 max=100 value=100><span id=lfo_amp_display></span></li>
     <li>offset: <input type=range id=lfo_offset_gauge min=1 max=2000 value=200><span id=lfo_offset_display></span></li>
-    <li>cycle: <input type=range id=lfo_cycle_gauge min=1 max=100 value=50><span id=lfo_cycle_display></span></li>
+    <li>cycle: <input type=range id=lfo_cycle_gauge min=1 max=1000 value=50><span id=lfo_cycle_display></span></li>
   </ul></li>
   <li>lpf:<ul>
     <li>fc: <input type=range id=lpf_fc_gauge min=2 max=100 value=100><span id=lpf_fc_display></span></li>
     <li>q: <input type=range id=lpf_q_gauge  min=1 max=100 value=14><span id=lpf_q_display></span></li>
     <li>reset: <input type=button id=lpf_reset_button value=reset onclick='javascript:lpf_reset();'></li>    
   </ul></li>
+  <li>delay:<ul>
+    <li>delay: <input type=range id=delay_delay_gauge min=1 max=1000 value= 500><span id=delay_delay_display></span></li>
+    <li>decay: <input type=range id=delay_decay_gauge min=0 max= 100 value=  33><span id=delay_decay_display></span></li>
+  </ul></li>
 </ul>
+</form>
 <address>
-wobble-audio-api-v1.1.0:<br>
+wobble-audio-api-v1.2.0:<br>
 programmed by <a href='http://twitter.com/#!/koteitan'>koteitan</a></address>
 <script type="text/javascript"><!-- //--------------------------------------- 
 var audio_context;
@@ -40,8 +51,13 @@ var lfo_phase = 0; // radian
 var osc_scale_notelist = [];
 var lpf_hist = [0,0];
 var lpf_fc;
+var delay_hist = new Array(0);
+var delay_delay_samples = 0;
+var delay_is_reset = true;
+var delay_out = 0;
 window.onload = function(){
   //misc
+  delay_delay_gauge.onchange = delay_delay_gauge_onchange;
   var html="<table><tr>";
   for(var i=0;i<12;i++){
     html += "<td style='text-align:center'>"+strNote[i]+"</td>"
@@ -50,7 +66,7 @@ window.onload = function(){
   var osc_scale_notelist_init = [true,false,true,true,false,true,false,true,true,false,true,false]; //
   for(var i=0;i<12;i++){
     var strChecked = osc_scale_notelist_init[i]?"checked":"";
-    html += "<td style='text-align:center'><input type=checkbox id=scale_checkbox"+i+" "+strChecked+" onclick='javascript:set_scale();'></td>";
+    html += "<td style='text-align:center'><input type=checkbox id=scale_checkbox"+i+" "+strChecked+" onclick='javascript:scale_set();'></td>";
   }
   html += "</tr></table>";
   document.getElementById('scale_span').innerHTML = html;
@@ -71,12 +87,35 @@ window.onload = function(){
     var lfo_amp    = parseFloat(lfo_amp_gauge   .value)/100;
     var osc_note   = osc_scale_notelist[parseInt(osc_note_gauge  .value)];
     var osc_amp    = parseFloat(osc_amp_gauge   .value)/100;
+    var delay_decay = parseFloat(delay_decay_gauge.value)/100;
+    var osc_type;
+    for(var i=0;form.osc_type_radio.length;i++){
+      if(form.osc_type_radio[i].checked){
+        osc_type = i;
+        break;
+      }
+    }
     var s = new Float32Array(4096);
     //osc
     var osc_freq = 27.5*Math.pow(2,osc_note/12);
     for(var i=0;i<s.length;i++){
+      var osc_phase_back;
       osc_phase  = (osc_phase + 2*Math.PI*osc_freq*invfs) % (2*Math.PI);
-      s[i] = osc_amp*Math.sin(osc_phase);
+      switch(osc_type){
+        case 0: //sin
+        deafult:
+          s[i] = osc_amp*Math.sin(osc_phase);
+        break;
+        case 1: //saw
+          s[i] = osc_amp*(osc_phase/2*Math.PI*2 + 1);
+        break;
+        case 2: //sqr
+          s[i] = osc_phase<Math.PI?-osc_amp:+osc_amp;
+        break;
+        case 3: //pls
+          s[i] = osc_phase_back>osc_phase?osc_amp:0;
+        break;
+      }
     }
     //lfo
     var lfo_out = new Float32Array(4096);
@@ -94,6 +133,14 @@ window.onload = function(){
       lpf_hist[0] = f*(s[i]-out-q*lpf_hist[0]) + lpf_hist[0];
       s[i] = out;
     }
+    //delay
+    if(delay_is_reset) delay_reset(fs);
+    for(var i=0;i<s.length;i++){
+      s[i] += delay_out * delay_decay;
+      delay_hist.push(s[i]);
+      delay_out = delay_hist.shift();
+      s[i] += delay_out;
+    }
     //out
     e.outputBuffer.getChannelData(0).set(s);
     e.outputBuffer.getChannelData(1).set(s);
@@ -106,14 +153,16 @@ window.onload = function(){
     lfo_cycle_display. innerHTML  = (lfo_cycle*1000+"").substr(0,4)+"ms";
     lfo_amp_display.   innerHTML = Math.floor(lfo_amp*100)+"%";
     lfo_offset_display.innerHTML = lfo_offset+"hz";
+    delay_delay_display.innerHTML = Math.floor(delay_delay_samples*invfs*1000)+"ms";
+    delay_decay_display.innerHTML = delay_decay*100+"%";
   };
-  set_scale();
+  scale_set();
   jsnode.connect(audio_context.destination);
 }
 var lpf_reset=function(){
   lpf_hist = [0,0];
 }
-var set_scale=function(){
+var scale_set=function(){
   osc_scale_notelist = [];
   var noteno = 0;
   while(osc_scale_notelist.length<88){
@@ -122,6 +171,15 @@ var set_scale=function(){
     }
     noteno++;
   }
+}
+var delay_reset=function(fs){
+  delay_delay_samples = Math.floor(parseFloat(delay_delay_gauge.value)/1000*fs);
+  delay_hist = new Array(delay_delay_samples);
+  for(var i=0;i<delay_hist.length;i++) delay_hist[i] = 0;
+  delay_is_reset = false;
+}
+var delay_delay_gauge_onchange  = function(){
+  delay_is_reset = true;
 }
 //--------------------------------------- --></script>
 <body></html>
