@@ -12,6 +12,7 @@
 </head><body>
 <form name=form>
 wobble-audio-api-v1.2.0:<br>
+<input type=button value='start' onclick="javascript:handlestart();"><br>
 <ul>
   <li>osc:<ul>
     <li>type: 
@@ -19,14 +20,14 @@ wobble-audio-api-v1.2.0:<br>
       <input type=radio name=osc_type_radio>saw
       <input type=radio name=osc_type_radio>sqr
       <input type=radio name=osc_type_radio>pls</li>
-    <li>amp: <input type=range id=osc_amp_gauge  min=0 max=100 value=50><span id=osc_amp_display ></span></li>
+    <li>amp: <input type=range id=osc_amp_gauge  min=0 max=100 value=33><span id=osc_amp_display ></span></li>
     <li>note: <input type=range id=osc_note_gauge min=0 max= 88 value=10><span id=osc_note_display></span></li>
     <li>scale: <span id=scale_span></span></li>
     </ul></li>
   <li>lfo:<ul>
     <li>amp: <input type=range id=lfo_amp_gauge min=0 max=100 value=100><span id=lfo_amp_display></span></li>
     <li>offset: <input type=range id=lfo_offset_gauge min=1 max=2000 value=200><span id=lfo_offset_display></span></li>
-    <li>cycle: <input type=range id=lfo_cycle_gauge min=1 max=1000 value=50><span id=lfo_cycle_display></span></li>
+    <li>cycle: <input type=range id=lfo_cycle_gauge min=1 max=1000 value=35><span id=lfo_cycle_display></span></li>
   </ul></li>
   <li>lpf:<ul>
     <li>fc: <input type=range id=lpf_fc_gauge min=2 max=100 value=100><span id=lpf_fc_display></span></li>
@@ -41,7 +42,7 @@ wobble-audio-api-v1.2.0:<br>
 </form>
 <address>
 wobble-audio-api-v1.2.0:<br>
-programmed by <a href='http://twitter.com/#!/koteitan'>koteitan</a></address>
+programmed by <a href='https://github.com/koteitan'>koteitan</a></address>
 <script type="text/javascript"><!-- //--------------------------------------- 
 var audio_context;
 var jsnode;
@@ -49,12 +50,14 @@ var strNote = new Array('A','A#','B','C','C#','D','D#','E','F','F#','G','G#');
 var osc_phase =  0; // radian
 var lfo_phase = 0; // radian
 var osc_scale_notelist = [];
+var lfo_freq_hist = 1;
 var lpf_hist = [0,0];
 var lpf_fc;
 var delay_hist = new Array(0);
 var delay_delay_samples = 0;
 var delay_is_reset = true;
 var delay_out = 0;
+var windowloaded = false;
 window.onload = function(){
   //misc
   delay_delay_gauge.onchange = delay_delay_gauge_onchange;
@@ -70,9 +73,13 @@ window.onload = function(){
   }
   html += "</tr></table>";
   document.getElementById('scale_span').innerHTML = html;
+  windowloaded = true;
+}
+handlestart = function(){
+	if(!windowloaded) return;
   //audio
-  audio_context = new webkitAudioContext();
-  jsnode = audio_context.createJavaScriptNode(4096,0,1);
+  audio_context = new window.AudioContext();
+  jsnode = audio_context.createScriptProcessor(4096,0,1);
   jsnode.onaudioprocess = function(e){
     //callback ---------------------
     //misc
@@ -120,7 +127,8 @@ window.onload = function(){
     //lfo
     var lfo_out = new Float32Array(4096);
     for(var i=0;i<s.length;i++){
-      lfo_phase  = (lfo_phase + 2*Math.PI*lfo_freq*invfs) % (2*Math.PI);
+      lfo_freq_hist = lfo_freq - (lfo_freq-lfo_freq_hist)*0.99;
+      lfo_phase  = (lfo_phase + 2*Math.PI*lfo_freq_hist*invfs) % (2*Math.PI);
       lfo_out[i] = lfo_offset + (lfo_amp*lfo_offset)*Math.sin(lfo_phase);
     }
     //lpf (dsv)
